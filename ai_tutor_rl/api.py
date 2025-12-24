@@ -76,8 +76,14 @@ def get_recommendation(state: StudentState):
         action = 1 # Harder Question
         
     # Rule 3: Struggling -> Decrease Difficulty (RL is usually good at this too)
-    elif state.consecutive_failures >= 2 or (state.last_score < 4.0 and state.current_difficulty > 0.2):
+    elif (state.consecutive_failures >= 2 or state.last_score < 4.0) and state.current_difficulty > 0.15:
         action = 0 # Easier Question
+        
+    # Rule 4: Absolute Bottom -> Remedial Action
+    # If they are failing the EASIEST difficulty (0.1), giving them "Easier Question" (Action 0) won't help.
+    # We must switch to "Revision" (Action 2) to help them learn.
+    elif state.last_score < 5.0 and state.current_difficulty <= 0.15:
+        action = 2 # Revision / Study Material
 
     # Fallback to RL Agent if no obvious rule applies
     if action is None:
