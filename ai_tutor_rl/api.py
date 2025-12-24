@@ -43,23 +43,45 @@ ACTION_MAP = {
     4: ("Next Topic", "Advance to the next topic.")
 }
 
+@app.get("/recommend")
+def recommend_info():
+    return {"message": "Please use POST method with StudentState body to get recommendations."}
+
 @app.post("/recommend", response_model=Recommendation)
 def get_recommendation(state: StudentState):
     """
     Get the next best tutoring action based on student state.
     """
-    # Convert state to numpy array matching observation space
+    # Convert state to numpy array matching observation space (NORMALIZED)
     obs = np.array([
-        state.current_topic,
+        state.current_topic / float(NUM_TOPICS),
         state.current_difficulty,
-        state.last_score,
-        state.last_time,
-        state.consecutive_failures,
+        state.last_score / 10.0,
+        state.last_time / 60.0,
+        state.consecutive_failures / 5.0,
         state.engagement
     ], dtype=np.float32)
     
-    # Get action from agent (deterministic for deployment)
-    action = agent.act(obs, epsilon=0.0)
+    # Hybrid Logic: Rule-Based Overrides + RL Agent
+    # If the decision is obvious, don't trust the potentially unstable RL agent.
+    
+    action = None
+    
+    # Rule 1: Mastered Topic -> Move Next
+    if state.last_score >= 9.0 and state.current_difficulty >= 0.8:
+         action = 4 # Next Topic
+         
+    # Rule 2: Cruising -> Increase Difficulty
+    elif state.last_score >= 8.0 and state.current_difficulty < 0.9:
+        action = 1 # Harder Question
+        
+    # Rule 3: Struggling -> Decrease Difficulty (RL is usually good at this too)
+    elif state.consecutive_failures >= 2 or (state.last_score < 4.0 and state.current_difficulty > 0.2):
+        action = 0 # Easier Question
+
+    # Fallback to RL Agent if no obvious rule applies
+    if action is None:
+        action = agent.get_action(obs, eval_mode=True)
     
     # Map to human-readable format
     name, desc = ACTION_MAP.get(action, ("Unknown", "Unknown Action"))

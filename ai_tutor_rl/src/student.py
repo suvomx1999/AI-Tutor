@@ -31,7 +31,7 @@ class StudentSimulator:
         score = (difficulty * 10) if is_correct else 0
         
         # Time taken: harder questions take longer. Higher knowledge reduces time.
-        base_time = 30  # seconds
+        base_time = 20  # seconds (Reduced from 30 to make students faster)
         time_taken = base_time * (1 + difficulty) * (1 - topic_knowledge * 0.5)
         # Add some noise
         time_taken += np.random.normal(0, 5)
@@ -47,7 +47,7 @@ class StudentSimulator:
         Update student's knowledge and engagement based on the attempt.
         """
         # Learning: if correct and difficult, learn more. If incorrect, learn from mistake (less).
-        learning_rate = 0.15
+        learning_rate = 0.25 # Increased from 0.15 to accelerate learning
         if is_correct:
             # Learning gain proportional to difficulty
             gain = learning_rate * difficulty * self.engagement

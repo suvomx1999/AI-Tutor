@@ -147,12 +147,20 @@ class StudentEnv(gym.Env):
             if is_correct:
                 # Base reward for correct answer, scaled by difficulty
                 # Easy questions give less reward than hard ones
-                reward += 10 * (1 + self.current_difficulty) 
+                reward += 20 * (1 + self.current_difficulty) 
             else:
-                reward -= 1 # Slight penalty for wrong answer
+                reward -= 0.5 # Reduced penalty for wrong answer
         
         if knowledge_gain > 0.01:
             reward += 50 * knowledge_gain # Scale up small float gain
+        
+        # Penalize reducing difficulty if student is doing well
+        if action == 0 and self.last_score > 7:
+            reward -= 100 # Massive penalty: NEVER make it easier for a smart student
+        
+        # Reward increasing difficulty if student is cruising
+        if action == 1 and self.last_score > 8:
+            reward += 30
             
         if self.consecutive_failures > 2:
             reward -= 5
@@ -182,7 +190,7 @@ class StudentEnv(gym.Env):
         # If knowledge in current topic is very high (>0.95), and we are not moving (Action 4), give penalty
         if self.student.knowledge[self.current_topic] > 0.95 and action != 4:
             if self.current_topic < self.num_topics - 1:
-                reward -= 20 # Massive penalty
+                reward -= 50 # Massive penalty for stagnating
 
         observation = self._get_obs()
         
