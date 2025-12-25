@@ -28,7 +28,10 @@ class StudentSimulator:
         is_correct = np.random.random() < success_prob
         
         # Score based on difficulty and correctness
-        score = (difficulty * 10) if is_correct else 0
+        # score = (difficulty * 10) if is_correct else 0
+        # FIXED: Score should be 10 if correct, regardless of difficulty, 
+        # so that passing an easy question isn't seen as a failure by the rules.
+        score = 10.0 if is_correct else 0.0
         
         # Time taken: harder questions take longer. Higher knowledge reduces time.
         base_time = 20  # seconds (Reduced from 30 to make students faster)

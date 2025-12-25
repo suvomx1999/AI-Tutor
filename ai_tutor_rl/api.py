@@ -1,11 +1,22 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
 import numpy as np
 import os
 from src.agent import DQNAgent
+from src.nlp_engine import NLPEngine
 
 app = FastAPI(title="AI Tutor RL API", description="Real-time RL-based tutoring recommendations for integration with LMS.")
+
+# Add CORS Middleware to allow requests from the browser client
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Load Model
 NUM_TOPICS = 10
@@ -15,6 +26,13 @@ HIDDEN_DIM = 128
 
 agent = DQNAgent(STATE_DIM, ACTION_DIM, HIDDEN_DIM)
 MODEL_PATH = "models/dqn_tutor.pth"
+
+# Load NLP Engine
+try:
+    nlp_engine = NLPEngine()
+except Exception as e:
+    print(f"⚠️ Error loading NLP Engine: {e}")
+    nlp_engine = None
 
 if os.path.exists(MODEL_PATH):
     agent.load(MODEL_PATH)
@@ -93,6 +111,106 @@ def get_recommendation(state: StudentState):
     name, desc = ACTION_MAP.get(action, ("Unknown", "Unknown Action"))
     
     return Recommendation(action_id=action, action_name=name, description=desc)
+
+# --- NLP Interaction Endpoints ---
+
+class InteractionRequest(BaseModel):
+    state: StudentState
+    user_answer: str
+    reference_answer: str
+
+class InteractionResponse(BaseModel):
+    grade: float
+    feedback_text: str
+    next_question: str
+    next_reference: str
+    new_state: StudentState
+    action_name: str
+
+@app.get("/start_session", response_model=InteractionResponse)
+def start_session():
+    """Initialize a new student session."""
+    # Default initial state
+    initial_state = StudentState(
+        current_topic=0,
+        current_difficulty=0.5,
+        last_score=0.0,
+        last_time=0.0,
+        consecutive_failures=0,
+        engagement=1.0
+    )
+    
+    # Get first question
+    q_text, a_text = nlp_engine.get_question(0, 0.5)
+    
+    return InteractionResponse(
+        grade=0.0,
+        feedback_text="Welcome! Let's start with Python Basics.",
+        next_question=q_text,
+        next_reference=a_text,
+        new_state=initial_state,
+        action_name="Start"
+    )
+
+@app.post("/submit_answer", response_model=InteractionResponse)
+def submit_answer(request: InteractionRequest):
+    """
+    1. Grade user answer (NLP)
+    2. Update Student State
+    3. Get RL Action
+    4. Fetch Next Question
+    """
+    if nlp_engine is None:
+        raise HTTPException(status_code=500, detail="NLP Engine not loaded")
+        
+    # 1. Grade Answer
+    grade = nlp_engine.grade_answer(request.user_answer, request.reference_answer)
+    
+    # 2. Update State
+    state = request.state
+    state.last_score = grade
+    
+    # Simple logic for failures/engagement update
+    if grade < 4.0:
+        state.consecutive_failures += 1
+        state.engagement = max(0.0, state.engagement - 0.1)
+    else:
+        state.consecutive_failures = 0
+        state.engagement = min(1.0, state.engagement + 0.1)
+        
+    # 3. Get Recommendation (Reuse logic by calling internal function or just copy logic)
+    # We'll just call the get_recommendation function logic directly or via internal helper.
+    # Since get_recommendation is an endpoint, calling it directly works if it returns the object.
+    rec = get_recommendation(state)
+    
+    # 4. Apply Action to State (Transition Function)
+    if rec.action_id == 0: # Easier
+        state.current_difficulty = max(0.1, round(state.current_difficulty - 0.1, 2))
+    elif rec.action_id == 1: # Harder
+        state.current_difficulty = min(1.0, round(state.current_difficulty + 0.1, 2))
+    elif rec.action_id == 2: # Revision
+        # Keep same topic, maybe lower difficulty slightly or keep same
+        pass
+    elif rec.action_id == 4: # Next Topic
+        state.current_topic = (state.current_topic + 1) % NUM_TOPICS
+        state.current_difficulty = 0.5
+        state.consecutive_failures = 0
+        
+    # 5. Fetch Next Question
+    q_text, a_text = nlp_engine.get_question(
+        state.current_topic, 
+        state.current_difficulty,
+        exclude_answer=request.reference_answer
+    )
+    
+    return InteractionResponse(
+        grade=grade,
+        feedback_text=f"Score: {grade}/10. {rec.description}",
+        next_question=q_text,
+        next_reference=a_text,
+        new_state=state,
+        action_name=rec.action_name
+    )
 
 @app.get("/")
 def health_check():

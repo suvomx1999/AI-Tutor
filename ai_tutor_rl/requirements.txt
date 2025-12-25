@@ -6,3 +6,4 @@ matplotlib
 streamlit
 fastapi
 uvicorn
+sentence-transformers

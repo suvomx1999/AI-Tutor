@@ -13,7 +13,10 @@ dashboard:
 demo:
 	python ai_tutor_rl/demo_topic_completion.py
 api:
-	python ai_tutor_rl/api.py
+	uvicorn ai_tutor_rl.api:app --host 0.0.0.0 --port 8000 --reload
+
+client:
+	open ai_tutor_rl/client/index.html
 
 clean:
 	rm -rf models plots

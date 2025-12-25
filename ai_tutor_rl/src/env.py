@@ -78,8 +78,11 @@ class StudentEnv(gym.Env):
         # HARD OVERRIDE: If knowledge is > 0.95, FORCE action 4 (Next Topic)
         # This applies to ALL topics (0 to N-1), ensuring the student progresses
         # immediately upon mastery (95%).
-        if prev_knowledge > 0.95 and self.current_topic < self.num_topics - 1:
+        # STRICT PROGRESSION: Require high knowledge (>0.92) before forcing move
+        if prev_knowledge > 0.92 and self.current_topic < self.num_topics - 1:
             action = 4
+            
+        executed_action = action
 
         if action == 0: # Easier
             self.current_difficulty = max(0.1, self.current_difficulty - 0.2)
@@ -95,7 +98,8 @@ class StudentEnv(gym.Env):
             self.student.study(self.current_topic, intensity=1.0)
             # Revision takes time
             time = 60 
-            score = 0 
+            # FIXED: Return a score reflecting current mastery instead of 0
+            score = self.student.knowledge[self.current_topic] * 10.0
             is_correct = True # Assume revision is "completed"
             
         elif action == 3: # Practice (Same difficulty)
@@ -104,7 +108,8 @@ class StudentEnv(gym.Env):
         elif action == 4: # Next Topic
             # Only allow moving if knowledge is sufficient (e.g. > 0.85)
             # Otherwise, treat as practice and give penalty
-            if self.student.knowledge[self.current_topic] > 0.85:
+            # STRICT: Require >0.92 knowledge to voluntarily move
+            if self.student.knowledge[self.current_topic] > 0.92:
                 if self.current_topic < self.num_topics - 1:
                     self.current_topic += 1
                     self.current_difficulty = 0.5 # Reset difficulty for new topic
@@ -178,7 +183,8 @@ class StudentEnv(gym.Env):
         
         # Check if mastered all topics
         # Requirement: ALL topics must be mastered (> 0.9), not just the average.
-        if np.min(self.student.knowledge) > 0.9:
+        # STRICT: Require >0.92 minimum knowledge across ALL topics
+        if np.min(self.student.knowledge) > 0.92:
             reward += 100
             done = True
         
@@ -197,7 +203,8 @@ class StudentEnv(gym.Env):
         info = {
             'knowledge': self.student.knowledge.copy(),
             'engagement': self.student.engagement,
-            'topic': self.current_topic
+            'topic': self.current_topic,
+            'executed_action': executed_action
         }
         self.history.append((action, reward, info))
         
