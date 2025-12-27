@@ -29,9 +29,17 @@ class StudentSimulator:
         
         # Score based on difficulty and correctness
         # score = (difficulty * 10) if is_correct else 0
-        # FIXED: Score should be 10 if correct, regardless of difficulty, 
-        # so that passing an easy question isn't seen as a failure by the rules.
-        score = 10.0 if is_correct else 0.0
+        # FIXED: Score is now continuous (0-10) to simulate semantic grading
+        if is_correct:
+            # Correct answers get high scores (7.5 - 10.0)
+            score = np.random.uniform(7.5, 10.0)
+        else:
+            # Incorrect answers get lower scores (0.0 - 7.0)
+            # Higher knowledge might mean a "better" wrong answer (partial credit)
+            max_wrong_score = 4.0 + (3.0 * topic_knowledge) # Up to 7.0
+            score = np.random.uniform(0.0, min(7.0, max_wrong_score))
+            
+        score = round(score, 1)
         
         # Time taken: harder questions take longer. Higher knowledge reduces time.
         base_time = 20  # seconds (Reduced from 30 to make students faster)

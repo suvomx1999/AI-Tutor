@@ -4,6 +4,11 @@ from pydantic import BaseModel
 import torch
 import numpy as np
 import os
+import sys
+
+# Add current directory to path so 'src' module can be found
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from src.agent import DQNAgent
 from src.nlp_engine import NLPEngine
 
