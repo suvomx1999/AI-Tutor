@@ -57,6 +57,7 @@ class Recommendation(BaseModel):
     action_id: int
     action_name: str
     description: str
+    reasoning: str = ""
 
 ACTION_MAP = {
     0: ("Easier Question", "Reduce difficulty to build confidence."),
@@ -89,33 +90,40 @@ def get_recommendation(state: StudentState):
     # If the decision is obvious, don't trust the potentially unstable RL agent.
     
     action = None
+    reasoning = ""
     
     # Rule 1: Mastered Topic -> Move Next
     if state.last_score >= 9.0 and state.current_difficulty >= 0.8:
          action = 4 # Next Topic
+         reasoning = "Excellent performance on high difficulty. Advancing to new material."
          
     # Rule 2: Cruising -> Increase Difficulty
     elif state.last_score >= 8.0 and state.current_difficulty < 0.9:
         action = 1 # Harder Question
+        reasoning = "Strong understanding shown. Increasing difficulty to challenge student."
         
     # Rule 3: Struggling -> Decrease Difficulty (RL is usually good at this too)
     elif (state.consecutive_failures >= 2 or state.last_score < 4.0) and state.current_difficulty > 0.15:
         action = 0 # Easier Question
+        reasoning = "Detected struggle. Lowering difficulty to rebuild confidence."
         
     # Rule 4: Absolute Bottom -> Remedial Action
     # If they are failing the EASIEST difficulty (0.1), giving them "Easier Question" (Action 0) won't help.
     # We must switch to "Revision" (Action 2) to help them learn.
     elif state.last_score < 5.0 and state.current_difficulty <= 0.15:
         action = 2 # Revision / Study Material
+        reasoning = "Fundamental gaps detected. Switching to revision mode."
 
     # Fallback to RL Agent if no obvious rule applies
     if action is None:
         action = agent.get_action(obs, eval_mode=True)
+        reasoning = "RL Agent optimized strategy based on engagement and learning state."
     
     # Map to human-readable format
     name, desc = ACTION_MAP.get(action, ("Unknown", "Unknown Action"))
     
-    return Recommendation(action_id=action, action_name=name, description=desc)
+    return Recommendation(action_id=action, action_name=name, description=desc, reasoning=reasoning)
+
 
 # --- NLP Interaction Endpoints ---
 
@@ -129,6 +137,7 @@ class InteractionResponse(BaseModel):
     feedback_text: str
     next_question: str
     next_reference: str
+    hint: str = "" 
     new_state: StudentState
     action_name: str
 
@@ -147,12 +156,14 @@ def start_session():
     
     # Get first question
     q_text, a_text = nlp_engine.get_question(0, 0.5)
+    hint_text = nlp_engine.get_hint(q_text)
     
     return InteractionResponse(
         grade=0.0,
         feedback_text="Welcome! Let's start with Python Basics.",
         next_question=q_text,
         next_reference=a_text,
+        hint=hint_text,
         new_state=initial_state,
         action_name="Start"
     )
@@ -198,21 +209,29 @@ def submit_answer(request: InteractionRequest):
         pass
     elif rec.action_id == 4: # Next Topic
         state.current_topic = (state.current_topic + 1) % NUM_TOPICS
-        state.current_difficulty = 0.5
-        state.consecutive_failures = 0
         
     # 5. Fetch Next Question
-    q_text, a_text = nlp_engine.get_question(
-        state.current_topic, 
-        state.current_difficulty,
-        exclude_answer=request.reference_answer
-    )
+    # Important: Avoid repeating the EXACT same question if possible
+    # We can pass the current reference answer to exclude it
+    q_text, a_text = nlp_engine.get_question(state.current_topic, state.current_difficulty, exclude_answer=request.reference_answer)
+    hint_text = nlp_engine.get_hint(q_text)
     
+    feedback = f"Score: {grade}/10. "
+    if grade == 10.0:
+        feedback += "Perfect!"
+    elif grade >= 7.0:
+        feedback += "Great job!"
+    elif grade >= 4.0:
+        feedback += "Good effort. "
+    else:
+        feedback += f"Keep trying. Correct answer: {request.reference_answer}"
+        
     return InteractionResponse(
         grade=grade,
-        feedback_text=f"Score: {grade}/10. {rec.description}",
+        feedback_text=feedback,
         next_question=q_text,
         next_reference=a_text,
+        hint=hint_text,
         new_state=state,
         action_name=rec.action_name
     )

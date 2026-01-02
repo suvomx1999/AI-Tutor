@@ -160,6 +160,11 @@
             <div id="question-text">Loading...</div>
         </div>
 
+        <button id="hint-btn" onclick="toggleHint()" style="background-color: #F59E0B; margin-bottom: 1rem; width: auto; padding: 0.5rem 1rem; font-size: 0.9rem;">💡 Show Hint</button>
+        <div id="hint-box" style="display: none; background-color: #FFFBEB; padding: 1rem; border-left: 4px solid #F59E0B; margin-bottom: 1rem; border-radius: 4px; color: #92400E;">
+            <!-- Hint text goes here -->
+        </div>
+
         <textarea id="answer-input" placeholder="Type your answer here..."></textarea>
         
         <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
@@ -173,6 +178,7 @@
     let currentState = null;
     let currentReference = "";
     let nextQuestionText = "";
+    let currentHint = "";
 
     async function startSession() {
         const btn = document.querySelector('button');
@@ -187,6 +193,7 @@
             // Init State
             currentState = data.new_state;
             currentReference = data.next_reference;
+            currentHint = data.hint || "No hint available.";
             
             // Update UI
             document.getElementById('start-area').style.display = 'none';
@@ -194,6 +201,7 @@
             
             updateStats(currentState);
             setQuestion(data.next_question);
+            resetHint();
             
         } catch (error) {
             alert("Error connecting to AI Tutor API. Check if it's running!");
@@ -242,6 +250,7 @@
             currentState = data.new_state;
             currentReference = data.next_reference;
             nextQuestionText = data.next_question;
+            currentHint = data.hint || "No hint available.";
             updateStats(currentState);
 
             // Switch buttons
@@ -273,6 +282,7 @@
         nextBtn.style.display = 'none';
 
         setQuestion(nextQuestionText);
+        resetHint();
     }
 
     function updateStats(state) {
@@ -289,7 +299,27 @@
             qBox.style.opacity = 1;
         }, 300);
     }
+
+    function toggleHint() {
+        const hintBox = document.getElementById('hint-box');
+        const hintBtn = document.getElementById('hint-btn');
+        
+        if (hintBox.style.display === 'none') {
+            hintBox.style.display = 'block';
+            hintBox.innerText = currentHint;
+            hintBtn.innerText = "💡 Hide Hint";
+        } else {
+            hintBox.style.display = 'none';
+            hintBtn.innerText = "💡 Show Hint";
+        }
+    }
+    
+    function resetHint() {
+        document.getElementById('hint-box').style.display = 'none';
+        document.getElementById('hint-btn').innerText = "💡 Show Hint";
+    }
 </script>
+
 
 </body>
 </html>

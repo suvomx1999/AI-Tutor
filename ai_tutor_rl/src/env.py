@@ -15,6 +15,10 @@ class StudentEnv(gym.Env):
         self.num_topics = num_topics
         self.student = None
         
+        # Prerequisites Graph
+        # Linear Dependency: Topic N requires Topic N-1 to be mastered (>0.8)
+        self.prerequisites = {i: [i-1] for i in range(1, num_topics)}
+        
         # Actions:
         # 0: Recommend easier content
         # 1: Recommend harder content
@@ -106,10 +110,22 @@ class StudentEnv(gym.Env):
             is_correct, score, time = self.student.attempt_question(self.current_topic, self.current_difficulty)
             
         elif action == 4: # Next Topic
-            # Only allow moving if knowledge is sufficient (e.g. > 0.85)
+            # Curriculum Enforcement
+            # Check if prerequisites are met for the NEXT topic
+            next_topic = self.current_topic + 1
+            can_advance = True
+            
+            if next_topic < self.num_topics:
+                reqs = self.prerequisites.get(next_topic, [])
+                for req_id in reqs:
+                    if self.student.knowledge[req_id] < 0.8: # Require 80% mastery of prerequisite
+                        can_advance = False
+                        break
+            
+            # Only allow moving if knowledge is sufficient (e.g. > 0.85) and prereqs met
             # Otherwise, treat as practice and give penalty
             # STRICT: Require >0.92 knowledge to voluntarily move
-            if self.student.knowledge[self.current_topic] > 0.92:
+            if can_advance and self.student.knowledge[self.current_topic] > 0.92:
                 if self.current_topic < self.num_topics - 1:
                     self.current_topic += 1
                     self.current_difficulty = 0.5 # Reset difficulty for new topic
@@ -120,7 +136,7 @@ class StudentEnv(gym.Env):
                     # Already at last topic, treat as practice
                     is_correct, score, time = self.student.attempt_question(self.current_topic, self.current_difficulty)
             else:
-                # Failed attempt to move (knowledge too low)
+                # Failed attempt to move (knowledge too low or prereqs missing)
                 # Treat as practice but penalize
                 is_correct, score, time = self.student.attempt_question(self.current_topic, self.current_difficulty)
                 reward -= 20 # Penalty for trying to skip
@@ -139,43 +155,44 @@ class StudentEnv(gym.Env):
         else:
             self.consecutive_failures = 0
 
-        # Calculate Reward
-        # +10 for correct answers (action 0,1,3,4)
-        # +5 for improvement (knowledge gain)
-        # -5 for repeated incorrect (consecutive failures)
-        # -10 for disengagement (if student engagement drops too low)
+        # Calculate Reward (ENHANCED DELTA LOGIC)
+        # 1. Base: Score (scaled 0-1)
+        reward = self.last_score / 10.0
         
+        # 2. Delta Reward: Improvement over previous attempt
+        # We need to track previous score for delta
+        # Since env doesn't track per-question history perfectly, we use knowledge gain proxy
         current_knowledge = self.student.knowledge[self.current_topic]
         knowledge_gain = current_knowledge - prev_knowledge
         
-        if action != 2:
-            if is_correct:
-                # Base reward for correct answer, scaled by difficulty
-                # Easy questions give less reward than hard ones
-                reward += 20 * (1 + self.current_difficulty) 
-            else:
-                reward -= 0.5 # Reduced penalty for wrong answer
-        
-        if knowledge_gain > 0.01:
-            reward += 50 * knowledge_gain # Scale up small float gain
-        
-        # Penalize reducing difficulty if student is doing well
-        if action == 0 and self.last_score > 7:
-            reward -= 100 # Massive penalty: NEVER make it easier for a smart student
-        
-        # Reward increasing difficulty if student is cruising
-        if action == 1 and self.last_score > 8:
-            reward += 30
+        # Huge reward for learning (moving the needle)
+        if knowledge_gain > 0:
+            reward += (knowledge_gain * 100.0) # e.g., 0.05 gain -> +5 reward
             
+        # 3. Action Specific Rewards/Penalties
+        
+        # Penalize reducing difficulty if student is doing well (Boredom prevention)
+        if action == 0 and prev_knowledge > 0.7:
+            reward -= 0.5 
+        
+        # Reward increasing difficulty if student is cruising (Flow state)
+        if action == 1 and prev_knowledge > 0.8:
+            reward += 0.5
+            
+        # Penalize repeated failures (Frustration prevention)
         if self.consecutive_failures > 2:
-            reward -= 5
+            reward -= 1.0
+            
+        # Reward appropriate advancement (Curriculum pacing)
+        if action == 4 and prev_topic != self.current_topic:
+             reward += 5.0 # Big bonus for completing a topic
             
         if self.student.engagement < 0.2:
-            reward -= 10
+            reward -= 2.0
             done = True # End session if student is disengaged
             
-        # Time penalty (efficiency)
-        reward -= time / 60.0 
+        # Time penalty (efficiency) - small
+        reward -= 0.01
 
         # Termination
         if self.current_step >= self.max_steps:

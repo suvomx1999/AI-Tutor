@@ -104,13 +104,48 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
     def get_action(self, state, eval_mode=False):
+        # Action Masking Logic
+        # State: [topic (norm), diff, score (norm), time, fail, eng]
+        # Actions: 0: Easier, 1: Harder, 2: Revision, 3: Practice, 4: Next Topic
+        
+        valid_actions = [0, 1, 2, 3, 4]
+        
+        # Unpack state for readability (assuming normalized inputs)
+        # Note: In real training, state is a numpy array. 
+        # We need raw values for logic, but here we estimate from normalized state or passed raw state.
+        # For simplicity, we apply heuristic masking on the q_values directly.
+        
+        current_diff = state[1]
+        last_score = state[2] * 10.0 # Denormalize
+        
+        # Mask 1: Don't increase difficulty if already maxed (or close)
+        if current_diff >= 1.0:
+            if 1 in valid_actions: valid_actions.remove(1)
+            
+        # Mask 2: Don't decrease difficulty if already min (or close)
+        if current_diff <= 0.1:
+            if 0 in valid_actions: valid_actions.remove(0)
+            
+        # Mask 3: Don't move to Next Topic if score is low
+        if last_score < 5.0:
+            if 4 in valid_actions: valid_actions.remove(4)
+            
+        if not valid_actions: # Fallback if all masked (shouldn't happen)
+            valid_actions = [3] # Default to Practice
+
         if not eval_mode and np.random.random() < self.epsilon:
-            return np.random.randint(self.action_dim)
+            return random.choice(valid_actions)
         
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
             q_values = self.policy_net(state_tensor)
-        return q_values.argmax().item()
+            
+        # Set invalid actions to -inf so argmax won't pick them
+        mask = torch.full_like(q_values, float('-inf'))
+        mask[0, valid_actions] = 0 # Unmask valid ones
+        
+        masked_q_values = q_values + mask
+        return masked_q_values.argmax().item()
 
     def replay(self):
         if len(self.memory) < self.batch_size:

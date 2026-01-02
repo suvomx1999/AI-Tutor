@@ -96,27 +96,32 @@ def get_hybrid_action(agent, env):
     
     # --- RULE BASED LOGIC (Matching api.py) ---
     action = None
+    reasoning = ""
     
     # Rule 1: Mastered Topic -> Move Next
     # Reduced threshold for easier demo visibility
     # STRICT: Require 9.0 score and very high difficulty to propose next topic
     if last_score >= 9.0 and current_difficulty >= 0.9:
          action = 4 # Next Topic
+         reasoning = "Excellent performance. Advancing topic."
          
     # Rule 2: Cruising -> Increase Difficulty
     elif last_score >= 8.0 and current_difficulty < 0.9:
         action = 1 # Harder Question
+        reasoning = "Strong performance. Increasing challenge."
         
     # Rule 3: Struggling -> Decrease Difficulty
     elif (consecutive_failures >= 2 or last_score < 4.0) and current_difficulty > 0.15:
         action = 0 # Easier Question
+        reasoning = "Struggling detected. Reducing difficulty."
         
     # Rule 4: Absolute Bottom -> Remedial Action
     elif last_score < 5.0 and current_difficulty <= 0.15:
         action = 2 # Revision
+        reasoning = "Fundamental gaps. Switching to revision."
         
     if action is not None:
-        return action, "Rule Override"
+        return action, "Rule Override", reasoning
 
     # --- RL AGENT LOGIC ---
     # Normalize for Agent
@@ -132,7 +137,8 @@ def get_hybrid_action(agent, env):
     ], dtype=np.float32)
     
     action = agent.get_action(obs, eval_mode=True)
-    return action, "RL Agent"
+    return action, "RL Agent", "RL Agent optimized strategy."
+
 
 if start_simulation:
     # Initialize Environment and Agent
@@ -181,6 +187,9 @@ if start_simulation:
         st.markdown("#### Activity Log")
         log_placeholder = st.empty()
 
+        st.markdown("#### Socratic Hints (Simulated)")
+        hint_placeholder = st.empty()
+
     # Run Episode
     env.reset()
     done = False
@@ -191,9 +200,28 @@ if start_simulation:
     
     step_count = 0
     
+    # Initialize NLP for Hints (Optional: Could mock it to save memory if slow)
+    # from src.nlp_engine import NLPEngine
+    # nlp = NLPEngine() 
+    # Mocking simple hints for dashboard speed
+    def get_mock_hint(topic, diff):
+        hints = [
+            "Think about the basic syntax.",
+            "Recall how loops work in this context.",
+            "Consider edge cases for this function.",
+            "Review the variable types involved.",
+            "Break the problem down into smaller steps."
+        ]
+        return hints[step_count % len(hints)]
+
     while not (done or truncated):
+        # ... (rest of loop)
+        # Add hint display
+        current_hint = get_mock_hint(env.current_topic, env.current_difficulty)
+        with hint_placeholder.container():
+             st.info(f"💡 {current_hint}")
         # Get Action using Hybrid Logic
-        action, source = get_hybrid_action(agent, env)
+        action, source, reasoning = get_hybrid_action(agent, env)
         
         # Take Step
         next_state, reward, done, truncated, info = env.step(action)
@@ -204,6 +232,7 @@ if start_simulation:
         if real_action != action:
             action = real_action
             source = "Env Override" # Indicate it was forced by environment rules
+            reasoning = "Forced progression by environment logic."
 
         new_row = {
             'Step': step_count, 
@@ -256,6 +285,7 @@ if start_simulation:
         <div style="background-color: {bg_color}; padding: 15px; border-radius: 10px; border-left: 5px solid {border_color};">
             <h3 style="margin:0; color: #1F2937;">{action_name}</h3>
             <p style="margin:5px 0 0 0; color: #4B5563; font-size: 0.9em;">Source: <b>{source}</b></p>
+            <p style="margin:5px 0 0 0; color: #4B5563; font-size: 0.9em; font-style: italic;">Reasoning: {reasoning}</p>
         </div>
         """
         action_container.markdown(action_html, unsafe_allow_html=True)

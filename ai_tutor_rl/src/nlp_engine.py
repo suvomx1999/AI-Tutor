@@ -66,6 +66,32 @@ class NLPEngine:
         best_match = min(candidates, key=lambda x: abs(x['d'] - difficulty))
         return best_match['q'], best_match['a']
 
+    def get_hint(self, question_text: str) -> str:
+        """
+        Returns a pedagogical hint for the given question.
+        Uses a simple keyword mapping or generates a generic hint based on the question type.
+        """
+        # 1. Simple Keyword Heuristics
+        q_lower = question_text.lower()
+        
+        if "variable" in q_lower:
+            return "Hint: Think about how you store values in programming."
+        if "print" in q_lower or "output" in q_lower:
+            return "Hint: Look for a built-in function that displays text."
+        if "loop" in q_lower:
+            return "Hint: Consider the syntax for repeating actions (for/while)."
+        if "function" in q_lower or "def" in q_lower:
+            return "Hint: Functions are defined using a specific 3-letter keyword."
+        if "list" in q_lower:
+            return "Hint: Lists are mutable sequences, often defined with square brackets []."
+        if "dictionary" in q_lower:
+            return "Hint: Dictionaries store key-value pairs."
+        if "if" in q_lower or "condition" in q_lower:
+            return "Hint: Think about decision making logic."
+            
+        # 2. Generic Hint if no keyword matches
+        return "Hint: Review the core concepts of this topic. Break the problem down into smaller steps."
+
     def grade_answer(self, user_answer: str, reference_answer: str) -> float:
         """
         Computes semantic similarity between user answer and reference.
