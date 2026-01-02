@@ -1,14 +1,31 @@
-# AI Tutor System: Hybrid Rule-RL Architecture
+# Adaptive Personalized Tutoring System
+## Using Hybrid Deep Reinforcement Learning and Semantic NLP
 
-A next-generation AI Tutor that uses a **Hybrid Architecture** combining Pedagogical Rules with Deep Reinforcement Learning (DQN) to personalize education.
+A next-generation AI Tutor that replicates the **"2 Sigma"** effectiveness of human one-on-one tutoring. This system uses a **Hybrid Architecture** combining Pedagogical Rules with Deep Reinforcement Learning (DQN) and **Semantic NLP** to personalize education dynamically.
 
 ![Dashboard Preview](https://via.placeholder.com/800x400?text=AI+Tutor+Dashboard+Preview)
 
+---
+
 ## 🌟 Key Features
-1.  **Hybrid Brain**: Uses expert rules for safety (e.g., "Always review if failing") and RL for optimization (e.g., "Find the perfect difficulty").
-2.  **Real-Time Dashboard**: Watch the AI adapt to a simulated student in real-time.
-3.  **Interactive Client**: A web-based "Student Portal" to play with the AI yourself.
-4.  **Gymnasium Environment**: Custom `StudentEnv` for training educational agents.
+
+### 1. 🧠 Hybrid Decision Engine
+*   **Deep Q-Network (DQN):** Optimizes the long-term learning trajectory using a novel **"Delta-Reward"** function that prioritizes knowledge gain over short-term test scores.
+*   **Safety Layer:** A rule-based guardrail that prevents pedagogical failures (e.g., ensuring prerequisites are met before advancing).
+*   **Action Masking:** Enforces the curriculum dependency graph while allowing the AI flexibility in *how* to teach.
+
+### 2. 🗣️ Semantic NLP Assessment
+*   **Beyond Multiple Choice:** Uses **Sentence-BERT (`all-MiniLM-L6-v2`)** to evaluate open-ended student responses.
+*   **Continuous Grading:** Provides granular scores (e.g., 7.5/10) based on semantic similarity to expert answers, rather than binary correct/incorrect.
+*   **Adversarial Robustness:** Includes mechanisms to detect "gaming the system" (e.g., keyword stuffing).
+
+### 3. 📚 Non-Linear Playlist
+*   **Dynamic Curriculum:** Unlike static playlists, the AI acts as a "Director," dynamically inserting revision, practice, or harder content based on real-time fatigue and mastery estimation.
+*   **Smart Pause:** (Roadmap) Intelligently pauses video content to ask checking questions.
+
+### 4. 📊 Explainable AI Dashboard
+*   **Real-Time Visualization:** Watch the "Brain" of the tutor as it updates the student's estimated Knowledge State ($K$) and Engagement ($E$).
+*   **Decision Transparency:** See exactly *why* the AI chose a specific action (e.g., "Reason: High mastery but low engagement -> Increase Difficulty").
 
 ---
 
@@ -20,7 +37,7 @@ make install
 ```
 
 ### 2. Run the Dashboard (Developer View)
-Watch the agent teach a simulated student.
+Watch the agent teach a simulated student in the `Streamlit` dashboard.
 ```bash
 make dashboard
 ```
@@ -45,19 +62,20 @@ This opens `ai_tutor_rl/client/index.html` in your browser. You can now take qui
 
 ```mermaid
 graph TD
-    User[Student] -->|Submits Score| API[FastAPI Server];
-    API -->|State| Hybrid[Hybrid System];
+    User[Student] -->|Natural Language Answer| NLP[Semantic NLP Engine];
+    NLP -->|Semantic Score & Embedding| State[State Vector];
+    State -->|Input| Hybrid[Hybrid System];
     
     subgraph "Hybrid Decision Engine"
         Hybrid -->|Check Rules| Rules{Safety Rules?};
         Rules -->|Yes| Override[Rule Action];
         Rules -->|No| RL[DQN Agent];
-        RL -->|Predict| RLAction[Optimal Action];
+        RL -->|Predict Q-Values| RLAction[Optimal Action];
     end
     
     Override --> Response;
     RLAction --> Response;
-    Response -->|JSON| User;
+    Response -->|Pedagogical Action| User;
 ```
 
 ### Decision Logic
@@ -71,20 +89,31 @@ graph TD
 
 ## 🛠️ Project Structure
 
-- **`ai_tutor_rl/api.py`**: The production backend. Contains the Hybrid Logic.
+- **`ai_tutor_rl/api.py`**: The production backend. Contains the Hybrid Logic & NLP integration.
 - **`ai_tutor_rl/app.py`**: Streamlit dashboard for visualization.
+- **`ai_tutor_rl/src/nlp_engine.py`**: The Semantic NLP module (Sentence-BERT).
+- **`ai_tutor_rl/src/agent.py`**: The DQN Agent with Action Masking.
+- **`ai_tutor_rl/src/env.py`**: The `StudentEnv` gymnasium environment.
 - **`ai_tutor_rl/client/`**: HTML/JS frontend for the Student Portal.
-- **`ai_tutor_rl/src/`**: Core logic (Environment, Agent, Student Sim).
 
-## 📊 Training
+---
+
+## 📊 Training & Evaluation
+
 To retrain the RL agent from scratch:
 ```bash
 make train
 ```
 The model is saved to `models/dqn_tutor.pth`.
 
-## 🧪 Evaluation
 Compare the AI against a static baseline:
 ```bash
 make evaluate
 ```
+
+---
+
+## 🔮 Roadmap
+- [ ] **Khan Academy Integration:** YouTube IFrame API control for "Smart Pause".
+- [ ] **Duolingo Gamification:** Adding "Streak Freezes" and "Leagues" to the engagement model.
+- [ ] **Generative Content:** Integrating Sora/HeyGen for custom video explanations.
