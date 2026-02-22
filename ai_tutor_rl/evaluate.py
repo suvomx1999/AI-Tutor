@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from src.env import StudentEnv
-from src.agent import DQNAgent
+from src.agent import DQNAgent, DRQNAgent, LSTMTutorPolicy
+from src.utils import smart_static_policy
 
 def static_tutor_policy(state):
     # state: [topic, difficulty, score, time, failures, engagement]
@@ -20,17 +21,7 @@ def static_tutor_policy(state):
     # so we might add a condition: if high score and high difficulty, move next.
     # But for simplicity let's stick to this or slightly smarter.
 
-def smart_static_policy(state, current_diff):
-    score = state[2]
-    # If mastered (high score on high difficulty), move next
-    if score > 8 and current_diff > 0.8:
-        return 4 # Next topic
-    elif score >= 7:
-        return 1 # Harder
-    elif score <= 4:
-        return 0 # Easier
-    else:
-        return 3 # Practice
+#
 
 def evaluate_agent(agent, env, episodes=10):
     total_rewards = []
@@ -134,29 +125,59 @@ if __name__ == "__main__":
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     
-    # Load Agent
-    agent = DQNAgent(state_dim, action_dim)
-    model_path = 'models/dqn_tutor.pth'
-    if os.path.exists(model_path):
-        agent.load(model_path)
-        print("Model loaded.")
+    # Load Agents
+    dqn_agent = DQNAgent(state_dim, action_dim)
+    dqn_model_path = 'models/dqn_tutor.pth'
+    if os.path.exists(dqn_model_path):
+        dqn_agent.load(dqn_model_path)
+        print("DQN model loaded.")
     else:
-        print("Model not found. Please train first.")
+        print("DQN model not found. Please train first.")
         exit()
-        
+
+    drqn_agent = DRQNAgent(state_dim, action_dim)
+    drqn_model_path = 'models/drqn_tutor.pth'
+    if os.path.exists(drqn_model_path):
+        drqn_agent.load(drqn_model_path)
+        print("DRQN model loaded.")
+    else:
+        print("DRQN model not found. You can still evaluate DQN and static baselines.")
+    lstm_policy = LSTMTutorPolicy(state_dim, action_dim, seq_len=12, hidden_dim=128)
+    lstm_model_path = 'models/lstm_tutor.pth'
+    if os.path.exists(lstm_model_path):
+        lstm_policy.load(lstm_model_path)
+        print("LSTM Tutor model loaded.")
+    else:
+        print("LSTM Tutor model not found. Skipping.")
+    
     # Compare
-    print("Evaluating RL Agent...")
-    rl_reward, rl_gain = evaluate_agent(agent, env, episodes=20)
+    print("Evaluating DQN Agent...")
+    dqn_reward, dqn_gain = evaluate_agent(dqn_agent, env, episodes=20)
+    if os.path.exists(drqn_model_path):
+        print("Evaluating DRQN Agent...")
+        drqn_reward, drqn_gain = evaluate_agent(drqn_agent, env, episodes=20)
+    else:
+        drqn_reward, drqn_gain = (np.nan, np.nan)
     
     print("Evaluating Static Tutor...")
     static_reward, static_gain = evaluate_agent(None, env, episodes=20)
+    if os.path.exists(lstm_model_path):
+        print("Evaluating LSTM Tutor...")
+        # Wrap policy into an adapter to reuse evaluate_agent
+        class Adapter:
+            def get_action(self, state, eval_mode=True): return lstm_policy.get_action(state)
+        lstm_reward, lstm_gain = evaluate_agent(Adapter(), env, episodes=20)
+    else:
+        lstm_reward, lstm_gain = (np.nan, np.nan)
     
     print(f"\nResults (Avg over 20 episodes):")
-    print(f"RL Agent - Reward: {rl_reward:.2f}, Knowledge Gain: {rl_gain:.4f}")
+    print(f"DQN Agent - Reward: {dqn_reward:.2f}, Knowledge Gain: {dqn_gain:.4f}")
+    print(f"DRQN Agent - Reward: {drqn_reward:.2f}, Knowledge Gain: {drqn_gain:.4f}")
     print(f"Static Tutor - Reward: {static_reward:.2f}, Knowledge Gain: {static_gain:.4f}")
+    print(f"LSTM Tutor - Reward: {lstm_reward:.2f}, Knowledge Gain: {lstm_gain:.4f}")
     
     # Visualize one episode
     if not os.path.exists('plots'):
         os.makedirs('plots')
-    visualize_episode(agent, 'plots/learning_path.png')
+    visualize_episode(dqn_agent, 'plots/learning_path.png')
     print("Learning path visualization saved to plots/learning_path.png")

@@ -1,7 +1,7 @@
 # Adaptive Personalized Tutoring System
 ## Using Hybrid Deep Reinforcement Learning and Semantic NLP
 
-A next-generation AI Tutor that replicates the **"2 Sigma"** effectiveness of human one-on-one tutoring. This system uses a **Hybrid Architecture** combining Pedagogical Rules with Deep Reinforcement Learning (DQN) and **Semantic NLP** to personalize education dynamically.
+A next-generation AI Tutor that aims to bridge the gap highlighted by the **"2 Sigma"** effectiveness of human one-on-one tutoring. This system uses a **Hybrid Architecture** combining Pedagogical Rules with Deep Reinforcement Learning (DQN) and **Semantic NLP** to personalize education dynamically.
 
 ![Dashboard Preview](https://via.placeholder.com/800x400?text=AI+Tutor+Dashboard+Preview)
 
@@ -55,6 +55,44 @@ Open a new terminal and run:
 make client
 ```
 This opens `ai_tutor_rl/client/index.html` in your browser. You can now take quizzes and get recommendations!
+
+---
+
+## 🧪 Reproducibility & Experiments
+
+To reproduce the results presented in our IEEE paper:
+
+### 1. Training & Evaluation
+```bash
+# Train the DRQN Agent
+python -c "import sys; sys.path.append('ai_tutor_rl'); from train import train_drqn; train_drqn(episodes=400)"
+
+# Compute Statistical Significance (p-values, Cohen's d)
+make stats
+```
+
+### 2. Generate Paper Plots
+Generate all figures (Learning Curves, Ablation Study, Sensitivity Analysis):
+```bash
+make plots
+```
+The figures will be saved in the root directory as `paper_plot_*.png`.
+
+### 3. Cross-Dataset Robustness
+Evaluate the agent's performance across simulated OULAD, ASSISTments, and EdNet environments:
+```bash
+python ai_tutor_rl/evaluate_cross_dataset.py
+```
+
+### 4. Human Study Protocols
+The full protocol for our Randomized Controlled Trial (RCT) is available in:
+- `human_study/experiment_protocol.md`
+- `human_study/consent_form_template.md`
+
+Run the analysis script on study data:
+```bash
+python human_study/analyze_study_data.py
+```
 
 ---
 

@@ -10,10 +10,11 @@ class StudentEnv(gym.Env):
     """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, num_topics=10):
+    def __init__(self, num_topics=10, student_config=None):
         super(StudentEnv, self).__init__()
         self.num_topics = num_topics
         self.student = None
+        self.student_config = student_config
         
         # Prerequisites Graph
         # Linear Dependency: Topic N requires Topic N-1 to be mastered (>0.8)
@@ -56,10 +57,31 @@ class StudentEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.student = StudentSimulator(self.num_topics)
+        
+        if self.student_config:
+            # Sample from calibrated distribution
+            lr_mean = self.student_config.get('mean_learning_rate', 0.1)
+            lr_std = self.student_config.get('std_learning_rate', 0.02)
+            decay = self.student_config.get('mean_engagement_decay', 0.05)
+            
+            # Sample learning rate with clipping
+            lr = np.random.normal(lr_mean, lr_std)
+            lr = max(0.01, min(0.5, lr))
+            
+            self.student = StudentSimulator(self.num_topics, learning_rate=lr, engagement_decay=decay)
+            
+            # Apply noise level if specified
+            if 'noise_level' in self.student_config:
+                 # We don't have a direct noise parameter in StudentSimulator yet, 
+                 # but we can set initial engagement lower for noisy students or modify behavior.
+                 # For now, let's just stick to LR/Decay adaptation.
+                 pass
+        else:
+            self.student = StudentSimulator(self.num_topics)
+            
         self.current_step = 0
         self.current_topic = 0
-        self.current_difficulty = 0.5 # Start with medium difficulty
+        self.current_difficulty = 0.3 # Start with easier difficulty
         self.last_score = 0
         self.last_time = 0
         self.consecutive_failures = 0
@@ -187,7 +209,7 @@ class StudentEnv(gym.Env):
         if action == 4 and prev_topic != self.current_topic:
              reward += 5.0 # Big bonus for completing a topic
             
-        if self.student.engagement < 0.2:
+        if self.student.engagement < 0.05:
             reward -= 2.0
             done = True # End session if student is disengaged
             

@@ -101,7 +101,7 @@ def get_hybrid_action(agent, env):
     # Rule 1: Mastered Topic -> Move Next
     # Reduced threshold for easier demo visibility
     # STRICT: Require 9.0 score and very high difficulty to propose next topic
-    if last_score >= 9.0 and current_difficulty >= 0.9:
+    if last_score >= 9.0 and current_difficulty >= 0.8:
          action = 4 # Next Topic
          reasoning = "Excellent performance. Advancing topic."
          

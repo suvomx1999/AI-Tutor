@@ -9,6 +9,12 @@ evaluate:
 
 dashboard:
 	streamlit run ai_tutor_rl/app.py
+ 
+stats:
+	python ai_tutor_rl/eval_stats.py
+ 
+plots:
+	python ai_tutor_rl/generate_paper_plots.py
 
 demo:
 	python ai_tutor_rl/demo_topic_completion.py

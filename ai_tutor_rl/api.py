@@ -5,6 +5,8 @@ import torch
 import numpy as np
 import os
 import sys
+import csv
+import datetime
 
 # Add current directory to path so 'src' module can be found
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +15,23 @@ from src.agent import DQNAgent
 from src.nlp_engine import NLPEngine
 
 app = FastAPI(title="AI Tutor RL API", description="Real-time RL-based tutoring recommendations for integration with LMS.")
+
+# --- DATA LOGGING SETUP ---
+LOG_DIR = "human_study_real"
+os.makedirs(LOG_DIR, exist_ok=True)
+INTERACTION_LOG_FILE = os.path.join(LOG_DIR, "interaction_logs_real.csv")
+SURVEY_LOG_FILE = os.path.join(LOG_DIR, "study_data_real.csv")
+
+# Initialize CSV headers if files don't exist
+if not os.path.exists(INTERACTION_LOG_FILE):
+    with open(INTERACTION_LOG_FILE, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['timestamp', 'session_id', 'topic', 'difficulty', 'score', 'engagement', 'action_id', 'action_name', 'reasoning'])
+
+if not os.path.exists(SURVEY_LOG_FILE):
+    with open(SURVEY_LOG_FILE, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['timestamp', 'session_id', 'group', 'sus_score', 'nasa_tlx_score', 'comments'])
 
 # Add CORS Middleware to allow requests from the browser client
 app.add_middleware(
@@ -46,6 +65,7 @@ else:
     print("⚠️ Warning: Model not found. Recommendations will be random.")
 
 class StudentState(BaseModel):
+    session_id: str = "anonymous"
     current_topic: int
     current_difficulty: float
     last_score: float # 0-10
@@ -58,6 +78,13 @@ class Recommendation(BaseModel):
     action_name: str
     description: str
     reasoning: str = ""
+
+class SurveyResponse(BaseModel):
+    session_id: str
+    group: str
+    sus_score: float
+    nasa_tlx_score: float
+    comments: str = ""
 
 ACTION_MAP = {
     0: ("Easier Question", "Reduce difficulty to build confidence."),
@@ -147,7 +174,7 @@ def start_session():
     # Default initial state
     initial_state = StudentState(
         current_topic=0,
-        current_difficulty=0.5,
+        current_difficulty=0.3,
         last_score=0.0,
         last_time=0.0,
         consecutive_failures=0,
@@ -189,10 +216,10 @@ def submit_answer(request: InteractionRequest):
     # Simple logic for failures/engagement update
     if grade < 4.0:
         state.consecutive_failures += 1
-        state.engagement = max(0.0, state.engagement - 0.1)
+        state.engagement = max(0.0, state.engagement - 0.05)
     else:
         state.consecutive_failures = 0
-        state.engagement = min(1.0, state.engagement + 0.1)
+        state.engagement = min(1.0, state.engagement + 0.05)
         
     # 3. Get Recommendation (Reuse logic by calling internal function or just copy logic)
     # We'll just call the get_recommendation function logic directly or via internal helper.
@@ -225,6 +252,24 @@ def submit_answer(request: InteractionRequest):
         feedback += "Good effort. "
     else:
         feedback += f"Keep trying. Correct answer: {request.reference_answer}"
+
+    # --- LOGGING INTERACTION ---
+    try:
+        with open(INTERACTION_LOG_FILE, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                datetime.datetime.now().isoformat(),
+                request.state.session_id,
+                request.state.current_topic,
+                request.state.current_difficulty,
+                grade,
+                request.state.engagement,
+                rec.action_id,
+                rec.action_name,
+                rec.reasoning
+            ])
+    except Exception as e:
+        print(f"⚠️ Logging failed: {e}")
         
     return InteractionResponse(
         grade=grade,
@@ -235,6 +280,24 @@ def submit_answer(request: InteractionRequest):
         new_state=state,
         action_name=rec.action_name
     )
+
+@app.post("/submit_survey")
+def submit_survey(response: SurveyResponse):
+    """Save human study survey data"""
+    try:
+        with open(SURVEY_LOG_FILE, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                datetime.datetime.now().isoformat(),
+                response.session_id,
+                response.group,
+                response.sus_score,
+                response.nasa_tlx_score,
+                response.comments
+            ])
+        return {"status": "saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save survey: {str(e)}")
 
 @app.get("/")
 def health_check():
